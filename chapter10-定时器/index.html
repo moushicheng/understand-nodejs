@@ -1,0 +1,406 @@
+<!doctype html><html lang=zh class=no-js> <head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="通过源码分析 Node.js 原理"><meta name=author content=theanarkh><link href=https://github.com/theanarkh/understand-nodejs/chapter10-%E5%AE%9A%E6%97%B6%E5%99%A8/ rel=canonical><link rel=icon href=../assets/images/favicon.png><meta name=generator content="mkdocs-1.2.2, mkdocs-material-7.2.8"><title>10-定时器 - Node.js 源码剖析</title><link rel=stylesheet href=../assets/stylesheets/main.92558b1b.min.css><link rel=stylesheet href=../assets/stylesheets/palette.3f5d1f46.min.css><link rel=preconnect href=https://fonts.gstatic.com crossorigin><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700%7CRoboto+Mono&display=fallback"><style>:root{--md-text-font-family:"Roboto";--md-code-font-family:"Roboto Mono"}</style></head> <body dir=ltr data-md-color-scheme=default data-md-color-primary=indigo data-md-color-accent=indigo> <script>function __prefix(e){return new URL("..",location).pathname+"."+e}function __get(e,t=localStorage){return JSON.parse(t.getItem(__prefix(e)))}</script> <script>var palette=__get("__palette");if(null!==palette&&"object"==typeof palette.color)for(var key in palette.color)document.body.setAttribute("data-md-color-"+key,palette.color[key])</script> <input class=md-toggle data-md-toggle=drawer type=checkbox id=__drawer autocomplete=off> <input class=md-toggle data-md-toggle=search type=checkbox id=__search autocomplete=off> <label class=md-overlay for=__drawer></label> <div data-md-component=skip> <a href=#101-libuv class=md-skip> 跳转至 </a> </div> <div data-md-component=announce> </div> <header class=md-header data-md-component=header> <nav class="md-header__inner md-grid" aria-label=Header> <a href=.. title="Node.js 源码剖析" class="md-header__button md-logo" aria-label="Node.js 源码剖析" data-md-component=logo> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="m19 2-5 4.5v11l5-4.5V2M6.5 5C4.55 5 2.45 5.4 1 6.5v14.66c0 .25.25.5.5.5.1 0 .15-.07.25-.07 1.35-.65 3.3-1.09 4.75-1.09 1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.31 4.75 1.06.1.05.15.03.25.03.25 0 .5-.25.5-.5V6.5c-.6-.45-1.25-.75-2-1V19c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V6.5C10.55 5.4 8.45 5 6.5 5z"/></svg> </a> <label class="md-header__button md-icon" for=__drawer> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2z"/></svg> </label> <div class=md-header__title data-md-component=header-title> <div class=md-header__ellipsis> <div class=md-header__topic> <span class=md-ellipsis> Node.js 源码剖析 </span> </div> <div class=md-header__topic data-md-component=header-topic> <span class=md-ellipsis> 10-定时器 </span> </div> </div> </div> <form class=md-header__option data-md-component=palette> <input class=md-option data-md-color-media data-md-color-scheme=default data-md-color-primary=indigo data-md-color-accent=indigo aria-label="Switch to dark mode" type=radio name=__palette id=__palette_1> <label class="md-header__button md-icon" title="Switch to dark mode" for=__palette_2 hidden> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6zm0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4zM7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg> </label> <input class=md-option data-md-color-media data-md-color-scheme=slate data-md-color-primary=blue data-md-color-accent=blue aria-label="Switch to light mode" type=radio name=__palette id=__palette_2> <label class="md-header__button md-icon" title="Switch to light mode" for=__palette_1 hidden> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3z"/></svg> </label> </form> <label class="md-header__button md-icon" for=__search> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg> </label> <div class=md-search data-md-component=search role=dialog> <label class=md-search__overlay for=__search></label> <div class=md-search__inner role=search> <form class=md-search__form name=search> <input type=text class=md-search__input name=query aria-label=搜索 placeholder=搜索 autocapitalize=off autocorrect=off autocomplete=off spellcheck=false data-md-component=search-query required> <label class="md-search__icon md-icon" for=__search> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg> </label> <nav class=md-search__options aria-label=Search> <a href=javascript:void(0) class="md-search__icon md-icon" aria-label=Share data-clipboard data-clipboard-text data-md-component=search-share tabindex=-1> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08z"/></svg> </a> <button type=reset class="md-search__icon md-icon" aria-label=Clear tabindex=-1> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg> </button> </nav> <div class=md-search__suggest data-md-component=search-suggest></div> </form> <div class=md-search__output> <div class=md-search__scrollwrap data-md-scrollfix> <div class=md-search-result data-md-component=search-result> <div class=md-search-result__meta> 正在初始化搜索引擎 </div> <ol class=md-search-result__list></ol> </div> </div> </div> </div> </div> <div class=md-header__source> <a href=https://github.com/theanarkh/understand-nodejs/ title=前往仓库 class=md-source data-md-component=source> <div class="md-source__icon md-icon"> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 496 512"><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg> </div> <div class=md-source__repository> understand-nodejs </div> </a> </div> </nav> </header> <div class=md-container data-md-component=container> <nav class=md-tabs aria-label=Tabs data-md-component=tabs> <div class="md-tabs__inner md-grid"> <ul class=md-tabs__list> <li class=md-tabs__item> <a href=.. class=md-tabs__link> Home </a> </li> <li class=md-tabs__item> <a href=../chapter00-%E5%89%8D%E8%A8%80/ class=md-tabs__link> 前言 </a> </li> <li class=md-tabs__item> <a href=../chapter01-Node.js%E7%BB%84%E6%88%90%E5%92%8C%E5%8E%9F%E7%90%86/ class=md-tabs__link> Node.js基础和架构 </a> </li> <li class=md-tabs__item> <a href=../chapter07-%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86/ class="md-tabs__link md-tabs__link--active"> Node.js核心模块的实现 </a> </li> <li class=md-tabs__item> <a href=../chapter20-%E6%8B%93%E5%B1%95Node.js/ class=md-tabs__link> 其他 </a> </li> </ul> </div> </nav> <main class=md-main data-md-component=main> <div class="md-main__inner md-grid"> <div class="md-sidebar md-sidebar--primary" data-md-component=sidebar data-md-type=navigation> <div class=md-sidebar__scrollwrap> <div class=md-sidebar__inner> <nav class="md-nav md-nav--primary md-nav--lifted" aria-label=Navigation data-md-level=0> <label class=md-nav__title for=__drawer> <a href=.. title="Node.js 源码剖析" class="md-nav__button md-logo" aria-label="Node.js 源码剖析" data-md-component=logo> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="m19 2-5 4.5v11l5-4.5V2M6.5 5C4.55 5 2.45 5.4 1 6.5v14.66c0 .25.25.5.5.5.1 0 .15-.07.25-.07 1.35-.65 3.3-1.09 4.75-1.09 1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.31 4.75 1.06.1.05.15.03.25.03.25 0 .5-.25.5-.5V6.5c-.6-.45-1.25-.75-2-1V19c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V6.5C10.55 5.4 8.45 5 6.5 5z"/></svg> </a> Node.js 源码剖析 </label> <div class=md-nav__source> <a href=https://github.com/theanarkh/understand-nodejs/ title=前往仓库 class=md-source data-md-component=source> <div class="md-source__icon md-icon"> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 496 512"><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg> </div> <div class=md-source__repository> understand-nodejs </div> </a> </div> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=.. class=md-nav__link> Home </a> </li> <li class=md-nav__item> <a href=../chapter00-%E5%89%8D%E8%A8%80/ class=md-nav__link> 前言 </a> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle" data-md-toggle=__nav_3 type=checkbox id=__nav_3> <label class=md-nav__link for=__nav_3> Node.js基础和架构 <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav aria-label=Node.js基础和架构 data-md-level=1> <label class=md-nav__title for=__nav_3> <span class="md-nav__icon md-icon"></span> Node.js基础和架构 </label> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=../chapter01-Node.js%E7%BB%84%E6%88%90%E5%92%8C%E5%8E%9F%E7%90%86/ class=md-nav__link> 01-Node.js组成和原理 </a> </li> <li class=md-nav__item> <a href=../chapter02-Libuv%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E5%92%8C%E9%80%9A%E7%94%A8%E9%80%BB%E8%BE%91/ class=md-nav__link> 02-Libuv数据结构和通用逻辑 </a> </li> <li class=md-nav__item> <a href=../chapter03-%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF/ class=md-nav__link> 03-事件循环 </a> </li> <li class=md-nav__item> <a href=../chapter04-%E7%BA%BF%E7%A8%8B%E6%B1%A0/ class=md-nav__link> 04-线程池 </a> </li> <li class=md-nav__item> <a href=../chapter05-Libuv%E6%B5%81/ class=md-nav__link> 05-Libuv流 </a> </li> <li class=md-nav__item> <a href=../chapter06-C%2B%2B%E5%B1%82/ class=md-nav__link> 06-C++层 </a> </li> </ul> </nav> </li> <li class="md-nav__item md-nav__item--active md-nav__item--nested"> <input class="md-nav__toggle md-toggle" data-md-toggle=__nav_4 type=checkbox id=__nav_4 checked> <label class=md-nav__link for=__nav_4> Node.js核心模块的实现 <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav aria-label=Node.js核心模块的实现 data-md-level=1> <label class=md-nav__title for=__nav_4> <span class="md-nav__icon md-icon"></span> Node.js核心模块的实现 </label> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=../chapter07-%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86/ class=md-nav__link> 07-信号处理 </a> </li> <li class=md-nav__item> <a href=../chapter08-DNS/ class=md-nav__link> 08-DNS </a> </li> <li class=md-nav__item> <a href=../chapter09-Unix%E5%9F%9F/ class=md-nav__link> 09-Unix域 </a> </li> <li class="md-nav__item md-nav__item--active"> <input class="md-nav__toggle md-toggle" data-md-toggle=toc type=checkbox id=__toc> <label class="md-nav__link md-nav__link--active" for=__toc> 10-定时器 <span class="md-nav__icon md-icon"></span> </label> <a href=./ class="md-nav__link md-nav__link--active"> 10-定时器 </a> <nav class="md-nav md-nav--secondary" aria-label=目录> <label class=md-nav__title for=__toc> <span class="md-nav__icon md-icon"></span> 目录 </label> <ul class=md-nav__list data-md-component=toc data-md-scrollfix> <li class=md-nav__item> <a href=#101-libuv class=md-nav__link> 10.1 Libuv的实现 </a> <nav class=md-nav aria-label="10.1 Libuv的实现"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#1011-libuv class=md-nav__link> 10.1.1 Libuv中维护定时器的数据结构 </a> </li> <li class=md-nav__item> <a href=#1012 class=md-nav__link> 10.1.2 比较函数 </a> </li> <li class=md-nav__item> <a href=#1013 class=md-nav__link> 10.1.3 初始化定时器结构体 </a> </li> <li class=md-nav__item> <a href=#1014 class=md-nav__link> 10.1.4 插入一个定时器 </a> </li> <li class=md-nav__item> <a href=#1015 class=md-nav__link> 10.1.5 停止一个定时器 </a> </li> <li class=md-nav__item> <a href=#1016 class=md-nav__link> 10.1.6 重新设置定时器 </a> </li> <li class=md-nav__item> <a href=#1017 class=md-nav__link> 10.1.7 计算二叉堆中超时时间最小值 </a> </li> <li class=md-nav__item> <a href=#1018 class=md-nav__link> 10.1.8 处理定时器 </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#102 class=md-nav__link> 10.2 核心数据结构 </a> <nav class=md-nav aria-label="10.2 核心数据结构"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#1021-timerslist class=md-nav__link> 10.2.1 TimersList </a> </li> <li class=md-nav__item> <a href=#1022 class=md-nav__link> 10.2.2 优先队列 </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#103 class=md-nav__link> 10.3 设置定时器处理函数 </a> </li> <li class=md-nav__item> <a href=#104 class=md-nav__link> 10.4 设置定时器 </a> </li> <li class=md-nav__item> <a href=#105 class=md-nav__link> 10.5 处理定时器 </a> </li> <li class=md-nav__item> <a href=#106-refunref class=md-nav__link> 10.6 ref和unref </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=../chapter11-setImmediate%E5%92%8CnextTick/ class=md-nav__link> 11-setImmediate和nextTick </a> </li> <li class=md-nav__item> <a href=../chapter12-%E6%96%87%E4%BB%B6/ class=md-nav__link> 12-文件 </a> </li> <li class=md-nav__item> <a href=../chapter13-%E8%BF%9B%E7%A8%8B/ class=md-nav__link> 13-进程 </a> </li> <li class=md-nav__item> <a href=../chapter14-%E7%BA%BF%E7%A8%8B/ class=md-nav__link> 14-线程 </a> </li> <li class=md-nav__item> <a href=../chapter15-Cluster/ class=md-nav__link> 15-Cluster </a> </li> <li class=md-nav__item> <a href=../chapter16-UDP/ class=md-nav__link> 16-UDP </a> </li> <li class=md-nav__item> <a href=../chapter17-TCP/ class=md-nav__link> 17-TCP </a> </li> <li class=md-nav__item> <a href=../chapter18-HTTP/ class=md-nav__link> 18-HTTP </a> </li> <li class=md-nav__item> <a href=../chapter19-%E6%A8%A1%E5%9D%97%E5%8A%A0%E8%BD%BD/ class=md-nav__link> 19-模块加载 </a> </li> <li class=md-nav__item> <a href=../chapter21-JS%20Stream/ class=md-nav__link> 20-JS Stream </a> </li> <li class=md-nav__item> <a href=../chapter22-events%E6%A8%A1%E5%9D%97/ class=md-nav__link> 21-events模块 </a> </li> <li class=md-nav__item> <a href=../chapter23-Async%20hooks/ class=md-nav__link> 22-Async hooks </a> </li> <li class=md-nav__item> <a href=../chapter24-Inspector/ class=md-nav__link> 23-Inspector </a> </li> </ul> </nav> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle" data-md-toggle=__nav_5 type=checkbox id=__nav_5> <label class=md-nav__link for=__nav_5> 其他 <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav aria-label=其他 data-md-level=1> <label class=md-nav__title for=__nav_5> <span class="md-nav__icon md-icon"></span> 其他 </label> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=../chapter20-%E6%8B%93%E5%B1%95Node.js/ class=md-nav__link> 24-拓展Node.js </a> </li> <li class=md-nav__item> <a href=../chapter25-Node.js子线程调试和诊断指南 class=md-nav__link> 25-Node.js子线程调试和诊断指南 </a> </li> <li class=md-nav__item> <a href=../chapter26-vscode%E8%B0%83%E8%AF%95Node.js/ class=md-nav__link> 26-vscode调试Node.js </a> </li> </ul> </nav> </li> </ul> </nav> </div> </div> </div> <div class="md-sidebar md-sidebar--secondary" data-md-component=sidebar data-md-type=toc> <div class=md-sidebar__scrollwrap> <div class=md-sidebar__inner> <nav class="md-nav md-nav--secondary" aria-label=目录> <label class=md-nav__title for=__toc> <span class="md-nav__icon md-icon"></span> 目录 </label> <ul class=md-nav__list data-md-component=toc data-md-scrollfix> <li class=md-nav__item> <a href=#101-libuv class=md-nav__link> 10.1 Libuv的实现 </a> <nav class=md-nav aria-label="10.1 Libuv的实现"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#1011-libuv class=md-nav__link> 10.1.1 Libuv中维护定时器的数据结构 </a> </li> <li class=md-nav__item> <a href=#1012 class=md-nav__link> 10.1.2 比较函数 </a> </li> <li class=md-nav__item> <a href=#1013 class=md-nav__link> 10.1.3 初始化定时器结构体 </a> </li> <li class=md-nav__item> <a href=#1014 class=md-nav__link> 10.1.4 插入一个定时器 </a> </li> <li class=md-nav__item> <a href=#1015 class=md-nav__link> 10.1.5 停止一个定时器 </a> </li> <li class=md-nav__item> <a href=#1016 class=md-nav__link> 10.1.6 重新设置定时器 </a> </li> <li class=md-nav__item> <a href=#1017 class=md-nav__link> 10.1.7 计算二叉堆中超时时间最小值 </a> </li> <li class=md-nav__item> <a href=#1018 class=md-nav__link> 10.1.8 处理定时器 </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#102 class=md-nav__link> 10.2 核心数据结构 </a> <nav class=md-nav aria-label="10.2 核心数据结构"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#1021-timerslist class=md-nav__link> 10.2.1 TimersList </a> </li> <li class=md-nav__item> <a href=#1022 class=md-nav__link> 10.2.2 优先队列 </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#103 class=md-nav__link> 10.3 设置定时器处理函数 </a> </li> <li class=md-nav__item> <a href=#104 class=md-nav__link> 10.4 设置定时器 </a> </li> <li class=md-nav__item> <a href=#105 class=md-nav__link> 10.5 处理定时器 </a> </li> <li class=md-nav__item> <a href=#106-refunref class=md-nav__link> 10.6 ref和unref </a> </li> </ul> </nav> </div> </div> </div> <div class=md-content data-md-component=content> <article class="md-content__inner md-typeset"> <a href=https://github.com/theanarkh/understand-nodejs/edit/main/docs/chapter10-定时器.md title=编辑此页 class="md-content__button md-icon"> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg> </a> <h1>10-定时器</h1> <p>Node.js V14对定时器模块进行了重构，之前版本的实现是用一个map，以超时时间为键，每个键对应一个队列。即有同样超时时间的节点在同一个队列。每个队列对应一个底层的一个节点（二叉堆里的节点），Node.js在事件循环的timer阶段会从二叉堆里找出超时的节点，然后执行回调，回调里会遍历队列，判断哪个节点超时了。14重构后，只使用了一个二叉堆的节点。我们看一下它的实现，首先看下定时器模块的整体关系图，如图10-1所示。<br> <img alt src="https://img-blog.csdnimg.cn/2834e17d10244f93861a062f659afa28.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1RIRUFOQVJLSA==,size_16,color_FFFFFF,t_70"><br> 图10-1</p> <p>下面我们先看一下定时器模块的几个重要的数据结构。</p> <h2 id=101-libuv>10.1 Libuv的实现<a class=headerlink href=#101-libuv title="Permanent link">&para;</a></h2> <p>Libuv中使用二叉堆实现了定时器。最快到期的节点是根节点。</p> <h3 id=1011-libuv>10.1.1 Libuv中维护定时器的数据结构<a class=headerlink href=#1011-libuv title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code>1.  // 取出loop中的计时器堆指针  
+2.  static struct heap *timer_heap(const uv_loop_t* loop) {  
+3.    return (struct heap*) &amp;loop-&gt;timer_heap;   
+4.  }  
+</code></pre></div> <h3 id=1012>10.1.2 比较函数<a class=headerlink href=#1012 title="Permanent link">&para;</a></h3> <p>因为Libuv使用二叉堆实现定时器，这就涉及到节点插入堆的时候的规则。</p> <div class=highlight><pre><span></span><code>5.  static int timer_less_than(const struct heap_node* ha,  
+6.                 const struct heap_node* hb) {  
+7.    const uv_timer_t* a;  
+8.    const uv_timer_t* b;  
+9.    // 通过结构体成员找到结构体首地址  
+10.   a = container_of(ha, uv_timer_t, heap_node);  
+11.   b = container_of(hb, uv_timer_t, heap_node);  
+12.   // 比较两个结构体中的超时时间  
+13.   if (a-&gt;timeout &lt; b-&gt;timeout)  
+14.     return 1;  
+15.   if (b-&gt;timeout &lt; a-&gt;timeout)  
+16.     return 0;  
+17.   // 超时时间一样的话，看谁先创建  
+18.   if (a-&gt;start_id &lt; b-&gt;start_id)  
+19.     return 1;  
+20.   if (b-&gt;start_id &lt; a-&gt;start_id)  
+21.     return 0;  
+22.   
+23.   return 0; 
+24. } 
+</code></pre></div> <h3 id=1013>10.1.3 初始化定时器结构体<a class=headerlink href=#1013 title="Permanent link">&para;</a></h3> <p>如果需要使用定时器，首先要对定时器的结构体进行初始化。</p> <div class=highlight><pre><span></span><code>1.  // 初始化uv_timer_t结构体  
+2.  int uv_timer_init(uv_loop_t* loop, uv_timer_t* handle) {  
+3.    uv__handle_init(loop, (uv_handle_t*)handle, UV_TIMER);  
+4.    handle-&gt;timer_cb = NULL;  
+5.    handle-&gt;repeat = 0;  
+6.    return 0;  
+7.  }
+</code></pre></div> <h3 id=1014>10.1.4 插入一个定时器<a class=headerlink href=#1014 title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code>1.  // 启动一个计时器  
+2.  int uv_timer_start(uv_timer_t* handle,  
+3.                     uv_timer_cb cb,  
+4.                     uint64_t timeout,  
+5.                     uint64_t repeat) {  
+6.    uint64_t clamped_timeout;  
+7.    
+8.    if (cb == NULL)  
+9.      return UV_EINVAL;  
+10.   // 重新执行start的时候先把之前的停掉  
+11.   if (uv__is_active(handle))  
+12.     uv_timer_stop(handle);  
+13.   // 超时时间，为绝对值  
+14.   clamped_timeout = handle-&gt;loop-&gt;time + timeout;  
+15.   if (clamped_timeout &lt; timeout)  
+16.     clamped_timeout = (uint64_t) -1;  
+17.   // 初始化回调，超时时间，是否重复计时，赋予一个独立无二的id  
+18.   handle-&gt;timer_cb = cb;  
+19.   handle-&gt;timeout = clamped_timeout;  
+20.   handle-&gt;repeat = repeat;  
+21.   // 用于超时时间一样的时候，比较定时器在二叉堆的位置，见cmp函数  
+22.   handle-&gt;start_id = handle-&gt;loop-&gt;timer_counter++;  
+23.   // 插入最小堆  
+24.   heap_insert(timer_heap(handle-&gt;loop),  
+25.               (struct heap_node*) &amp;handle-&gt;heap_node, 
+26.               timer_less_than);  
+27.   // 激活该handle  
+28.   uv__handle_start(handle);  
+29.   
+30.   return 0;  
+31. }
+</code></pre></div> <h3 id=1015>10.1.5 停止一个定时器<a class=headerlink href=#1015 title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code>1.  // 停止一个计时器  
+2.  int uv_timer_stop(uv_timer_t* handle) {  
+3.    if (!uv__is_active(handle))  
+4.      return 0;  
+5.    // 从最小堆中移除该计时器节点  
+6.    heap_remove(timer_heap(handle-&gt;loop),  
+7.                (struct heap_node*) &amp;handle-&gt;heap_node, 
+8.                timer_less_than);  
+9.    // 清除激活状态和handle的active数减一  
+10.   uv__handle_stop(handle);  
+11.   
+12.   return 0;  
+13. }
+</code></pre></div> <h3 id=1016>10.1.6 重新设置定时器<a class=headerlink href=#1016 title="Permanent link">&para;</a></h3> <p>重新设置定时器类似插入一个定时器，它首先需要把之前的定时器从二叉堆中移除，然后重新插入二叉堆。</p> <div class=highlight><pre><span></span><code>1.  // 重新启动一个计时器，需要设置repeat标记   
+2.  int uv_timer_again(uv_timer_t* handle) {  
+3.    if (handle-&gt;timer_cb == NULL)  
+4.      return UV_EINVAL;  
+5.    // 如果设置了repeat标记说明计时器是需要重复触发的  
+6.    if (handle-&gt;repeat) {  
+7.      // 先把旧的节点从最小堆中移除，然后再重新开启一个计时器  
+8.      uv_timer_stop(handle);  
+9.      uv_timer_start(handle, 
+10.                        handle-&gt;timer_cb, 
+11.                        handle-&gt;repeat, 
+12.                        handle-&gt;repeat);  
+13.   }  
+14.   
+15.   return 0; 
+16. }
+</code></pre></div> <h3 id=1017>10.1.7 计算二叉堆中超时时间最小值<a class=headerlink href=#1017 title="Permanent link">&para;</a></h3> <p>超时时间最小值，主要用于判断Poll IO节点是阻塞的最长时间。</p> <div class=highlight><pre><span></span><code>1.  // 计算最小堆中最小节点的超时时间，即最小的超时时间  
+2.  int uv__next_timeout(const uv_loop_t* loop) {  
+3.    const struct heap_node* heap_node;  
+4.    const uv_timer_t* handle;  
+5.    uint64_t diff;  
+6.    // 取出堆的根节点，即超时时间最小的  
+7.    heap_node = heap_min(timer_heap(loop));  
+8.    if (heap_node == NULL)  
+9.      return -1; /* block indefinitely */  
+10.     
+11.   handle = container_of(heap_node, uv_timer_t, heap_node);  
+12.   // 如果最小的超时时间小于当前时间，则返回0，说明已经超时  
+13.   if (handle-&gt;timeout &lt;= loop-&gt;time)  
+14.     return 0;  
+15.   // 否则计算还有多久超时，返回给epoll，epoll的timeout不能大于diff  
+16.   diff = handle-&gt;timeout - loop-&gt;time;  
+17.   if (diff &gt; INT_MAX)  
+18.     diff = INT_MAX;  
+19.   
+20.   return diff;  
+21. }  
+</code></pre></div> <h3 id=1018>10.1.8 处理定时器<a class=headerlink href=#1018 title="Permanent link">&para;</a></h3> <p>处理超时定时器就是遍历二叉堆，判断哪个节点超时了。</p> <div class=highlight><pre><span></span><code>1.  // 找出已经超时的节点，并且执行里面的回调  
+2.  void uv__run_timers(uv_loop_t* loop) {  
+3.    struct heap_node* heap_node;  
+4.    uv_timer_t* handle;  
+5.    
+6.    for (;;) {  
+7.      heap_node = heap_min(timer_heap(loop));  
+8.      if (heap_node == NULL)  
+9.        break;  
+10.   
+11.     handle = container_of(heap_node, uv_timer_t, heap_node);  
+12.     // 如果当前节点的时间大于当前时间则返回，说明后面的节点也没有超时  
+13.     if (handle-&gt;timeout &gt; loop-&gt;time)  
+14.       break;  
+15.     // 移除该计时器节点，重新插入最小堆，如果设置了repeat的话  
+16.     uv_timer_stop(handle);  
+17.     uv_timer_again(handle);  
+18.     // 执行超时回调  
+19.     handle-&gt;timer_cb(handle);  
+20.   }  
+21. }  
+</code></pre></div> <h2 id=102>10.2 核心数据结构<a class=headerlink href=#102 title="Permanent link">&para;</a></h2> <h3 id=1021-timerslist>10.2.1 TimersList<a class=headerlink href=#1021-timerslist title="Permanent link">&para;</a></h3> <p>相对超时时间一样的定时器会被放到同一个队列，比如当前执行setTimeout(()=&gt;{}, 10000})和5秒后执行setTimeout(()=&gt;{}, 10000})，这两个任务就会在同一个List中，这个队列由TimersList来管理。对应图1中的List那个队列。</p> <div class=highlight><pre><span></span><code>1.  function TimersList(expiry, msecs) {  
+2.    // 用于链表  
+3.    this._idleNext = this;   
+4.    this._idlePrev = this;   
+5.    this.expiry = expiry;  
+6.    this.id = timerListId++;  
+7.    this.msecs = msecs;  
+8.    // 在优先队列里的位置  
+9.    this.priorityQueuePosition = null;  
+10. }  
+</code></pre></div> <p>expiry记录的是链表中最快超时的节点的绝对时间。每次执行定时器阶段时会动态更新，msecs是超时时间的相对值（相对插入时的当前时间）。用于计算该链表中的节点是否超时。后续我们会看到具体的用处。</p> <h3 id=1022>10.2.2 优先队列<a class=headerlink href=#1022 title="Permanent link">&para;</a></h3> <div class=highlight><pre><span></span><code>1.  const timerListQueue = new PriorityQueue(compareTimersLists, setPosition)  
+</code></pre></div> <p>Node.js用优先队列对所有TimersList链表进行管理，优先队列本质是一个二叉堆（小根堆），每个TimersList链表在二叉堆里对应一个节点。根据TimersList的结构，我们知道每个链表都保存链表中最快到期的节点的过期时间。二叉堆以该时间为依据，即最快到期的list对应二叉堆中的根节点。根节点的到期时间就是整个Node.js定时器最快到期的时间，Node.js把Libuv中定时器节点的超时时间设置为该值，在事件循环的定时器阶段就会处理定时的节点，并且不断遍历优先队列，判断当前节点是否超时，如果超时了，就需要处理，如果没有超时，说明整个二叉堆的节点都没有超时。然后重新设置Libuv定时器节点新的到期时间。 </p> <p>另外，Node.js中用一个map保存了超时时间到TimersList链表的映射关系。 这样就可以根据相对超时时间快速找到对应的列表，利用空间换时间。了解完定时器整体的组织和核心数据结构，我们可以开始进入真正的源码分析了。 </p> <h2 id=103>10.3 设置定时器处理函数<a class=headerlink href=#103 title="Permanent link">&para;</a></h2> <p>Node.js在初始化的时候设置了处理定时器的函数。 setupTimers(processImmediate, processTimers);<br> setupTimers对应的C++函数是 </p> <div class=highlight><pre><span></span><code>1.  void SetupTimers(const FunctionCallbackInfo&lt;Value&gt;&amp; args) {  
+2.    auto env = Environment::GetCurrent(args);  
+3.    env-&gt;set_immediate_callback_function(args[0].As&lt;Function&gt;());  
+4.    env-&gt;set_timers_callback_function(args[1].As&lt;Function&gt;());  
+5.  } 
+</code></pre></div> <p>SetupTimers在env中保存了两个函数，processImmediate是处理setImmediate的，processTimers是处理定时器的。当有节点超时时，Node.js会执行该函数处理超时的节点，后续会看到该函数的具体处理逻辑。下面我们看一下如何设置一个定时器。</p> <h2 id=104>10.4 设置定时器<a class=headerlink href=#104 title="Permanent link">&para;</a></h2> <div class=highlight><pre><span></span><code>1.  function setTimeout(callback, after, arg1, arg2, arg3) {  
+2.    // 忽略处理参数args逻辑
+3.      // 新建一个Timeout对象
+4.    const timeout = new Timeout(callback, 
+5.                                      after, 
+6.                                      args, 
+7.                                      false, 
+8.                                      true);  
+9.    insert(timeout, timeout._idleTimeout);  
+10.   return timeout;  
+11. }  
+</code></pre></div> <p>setTimeout主要包含两个操作，new Timeout和insert。我们逐个分析一下。 1 setTimeout</p> <div class=highlight><pre><span></span><code>1.  function Timeout(callback, after, args, isRepeat, isRefed) {  
+2.    after *= 1; // Coalesce to number or NaN  
+3.      // 关于setTimeout的超时时间为0的问题在这里可以揭开迷雾
+4.    if (!(after &gt;= 1 &amp;&amp; after &lt;= TIMEOUT_MAX)) { 
+5.      after = 1; 
+6.    }  
+7.    // 超时时间相对值  
+8.    this._idleTimeout = after;  
+9.    // 前后指针，用于链表  
+10.   this._idlePrev = this;  
+11.   this._idleNext = this;  
+12.   // 定时器的开始时间  
+13.   this._idleStart = null; 
+14.   // 超时回调    
+15.   this._onTimeout = callback;  
+16.   // 执行回调时传入的参数  
+17.   this._timerArgs = args;  
+18.   // 是否定期触发超时，用于setInterval  
+19.   this._repeat = isRepeat ? after : null;  
+20.   this._destroyed = false;  
+21.     // this._idleStart = now();
+22.   // 激活底层的定时器节点（二叉堆的节点），说明有定时节点需要处理  
+23.   if (isRefed)  
+24.     incRefCount(); 
+25.     // 记录状态 
+26.   this[kRefed] = isRefed;  
+27.  }  
+</code></pre></div> <p>Timeout主要是新建一个对象记录一些定时器的相对超时时间（用于支持setInterval，重新插入队列时找到所属队列）、开始时间（用于计算定时器是否超时）等上下文信息。这里有一个关键的逻辑是isRefed的值。Node.js支持ref和unref状态的定时器（setTimeout 和setUnrefTimeout），unref状态的定时器，不会影响事件循环的退出。即当只有unref状态的定时器时，事件循环会结束。当isRefed为true时会执行incRefCount();</p> <div class=highlight><pre><span></span><code>1.  function incRefCount() {  
+2.    if (refCount++ === 0)  
+3.      toggleTimerRef(true);  
+4.  }  
+5.    
+6.  void ToggleTimerRef(const FunctionCallbackInfo&lt;Value&gt;&amp; args) {  
+7.    Environment::GetCurrent(args)-&gt;ToggleTimerRef(args[0]-&gt;IsTrue());  
+8.  }  
+9.    
+10. void Environment::ToggleTimerRef(bool ref) {  
+11.   if (started_cleanup_) return;  
+12.   // 打上ref标记，  
+13.   if (ref) {  
+14.     uv_ref(reinterpret_cast&lt;uv_handle_t*&gt;(timer_handle()));  
+15.   } else {  
+16.     uv_unref(reinterpret_cast&lt;uv_handle_t*&gt;(timer_handle()));  
+17.   }  
+18. }  
+</code></pre></div> <p>我们看到最终会调用Libuv的uv_ref或uv_unref修改定时器相关handle的状态，因为Node.js只会在Libuv中注册一个定时器handle并且是常驻的，如果JS层当前没有设置定时器，则需要修改定时器handle的状态为unref，否则会影响事件循环的退出。refCount值便是记录JS层ref状态的定时器个数的。所以当我们第一次执行setTimeout的时候，Node.js会激活Libuv的定时器节点。接着我们看一下insert。</p> <div class=highlight><pre><span></span><code>1.  let nextExpiry = Infinity;
+2.  function insert(item, msecs, start = getLibuvNow()) {  
+3.    msecs = MathTrunc(msecs);  
+4.    // 记录定时器的开始时间，见Timeout函数的定义  
+5.    item._idleStart = start;  
+6.    // 该相对超时时间是否已经存在对应的链表  
+7.    let list = timerListMap[msecs];  
+8.    // 还没有  
+9.    if (list === undefined) {  
+10.     // 算出绝对超时时间，第一个节点是该链表中最早到期的节点  
+11.     const expiry = start + msecs;  
+12.     // 新建一个链表  
+13.     timerListMap[msecs] = list = new TimersList(expiry, msecs);  
+14.     // 插入优先队列  
+15.     timerListQueue.insert(list);  
+16.     /*
+17.           nextExpiry记录所有超时节点中最快到期的节点，
+18.           如果有更快到期的，则修改底层定时器节点的过期时间  
+19.         */
+20.     if (nextExpiry &gt; expiry) {  
+21.       // 修改底层超时节点的超时时间  
+22.       scheduleTimer(msecs);  
+23.       nextExpiry = expiry;  
+24.     }  
+25.   }  
+26.   // 把当前节点加到链表里  
+27.   L.append(list, item);  
+28. }  
+</code></pre></div> <p>Insert的主要逻辑如下<br> 1 如果该超时时间还没有对应的链表，则新建一个链表，每个链表都会记录该链表中最快到期的节点的值，即第一个插入的值。然后把链表插入优先队列，优先队列会根据该链表的最快过期时间的值，把链表对应的节点调整到相应的位置。<br> 2 如果当前设置的定时器，比之前所有的定时器都快到期，则需要修改底层的定时器节点，使得更快触发超时。<br> 3 把当前的定时器节点插入对应的链表尾部。即该链表中最久超时的节点。<br> 假设我们在0s的时候插入一个节点，下面是插入第一个节点时的结构图如图10-2所示。 <img alt src="https://img-blog.csdnimg.cn/8088834776f84585a4d5ef050c73fbee.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1RIRUFOQVJLSA==,size_16,color_FFFFFF,t_70"></p> <p>图10-2</p> <p>下面我们看一下多个节点的情况。假设0s的时候插入两个节点10s过期和11s过期。如图10-3所示。 <img alt=在这里插入图片描述 src="https://img-blog.csdnimg.cn/0e5e072cd20f40ba9ef60780d254ca7b.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1RIRUFOQVJLSA==,size_16,color_FFFFFF,t_70"></p> <p>图10-3</p> <p>然后在1s的时候，插入一个新的11s过期的节点，9s的时候插入一个新的10s过期节点。我们看一下这时候的关系图如图10-4所示。 <img alt src="https://img-blog.csdnimg.cn/d32f8c30193b4123b7cd8415caee82bc.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1RIRUFOQVJLSA==,size_16,color_FFFFFF,t_70"></p> <p>图10-4</p> <p>我们看到优先队列中，每一个节点是一个链表，父节点对应的链表的第一个元素是比子节点链表的第一个元素先超时的，但是链表中后续节点的超时就不一定。比如子节点1s开始的节点就比父节点9s开始的节点先超时。因为同一队列，只是相对超时时间一样，而还有一个重要的因素是开始的时间。虽然某节点的相对超时时间长，但是如果它比另一个节点开始的早，那么就有可能比它先超时。后续我们会看到具体是怎么实现的。</p> <h2 id=105>10.5 处理定时器<a class=headerlink href=#105 title="Permanent link">&para;</a></h2> <p>前面我们讲到了设置定时器处理函数和设置一个定时器，但是在哪里触发这个处理定时器的函数呢？答案在scheduleTimer函数。Node.js的实现中，所有JS层设置的定时器对应Libuv的一个定时器节点，Node.js维护了JS层所有定时器的超时最小值。在第一个设置定时器或者设置一个新的定时器时，如果新设置的定时器比当前的最小值小，则会通过scheduleTimer修改超时时间。超时的时候，就会执行回调。scheduleTimer函数是对C++函数的封装。 </p> <div class=highlight><pre><span></span><code>1.  void ScheduleTimer(const FunctionCallbackInfo&lt;Value&gt;&amp; args) {  
+2.    auto env = Environment::GetCurrent(args);  
+3.    env-&gt;ScheduleTimer(args[0]-&gt;IntegerValue(env-&gt;context()).FromJust());  
+4.  }  
+5.    
+6.  void Environment::ScheduleTimer(int64_t duration_ms) {  
+7.    if (started_cleanup_) return;  
+8.    uv_timer_start(timer_handle(), RunTimers, duration_ms, 0);  
+9.  }  
+</code></pre></div> <p>uv_timer_start就是开启底层计时，即往Libuv的二叉堆插入一个节点（如果该handle已经存在二叉堆，则先删除）。超时时间是duration_ms，就是最快到期的时间，超时回调是RunTimers，在timer阶段会判断是否过期。是的话执行RunTimers函数。我们先看一下RunTimers函数的主要代码。</p> <div class=highlight><pre><span></span><code>1.  Local&lt;Function&gt; cb = env-&gt;timers_callback_function();  
+2.  ret = cb-&gt;Call(env-&gt;context(), process, 1, &amp;arg);  
+</code></pre></div> <p>RunTimers会执行timers_callback_function。timers_callback_function是在Node.js初始化的时候设置的processTimers函数。现在我们知道了Node.js是如何设置超时的处理函数，也知道了什么时候会执行该回调。那我们就来看一下回调时具体处理逻辑。 </p> <div class=highlight><pre><span></span><code>1.  void Environment::RunTimers(uv_timer_t* handle) {  
+2.    Local&lt;Function&gt; cb = env-&gt;timers_callback_function();  
+3.    MaybeLocal&lt;Value&gt; ret;  
+4.    Local&lt;Value&gt; arg = env-&gt;GetNow();  
+5.    
+6.    do {  
+7.      // 执行js回调processTimers函数  
+8.      ret = cb-&gt;Call(env-&gt;context(), process, 1, &amp;arg);  
+9.    } while (ret.IsEmpty() &amp;&amp; env-&gt;can_call_into_js());  
+10.     
+11.   // 如果还有未超时的节点，则ret为第一个未超时的节点的超时时间
+12.   int64_t expiry_ms = ret.ToLocalChecked()-&gt;IntegerValue(env-&gt;context()).FromJust();  
+13.   uv_handle_t* h = reinterpret_cast&lt;uv_handle_t*&gt;(handle);  
+14.   
+15.     /*  
+16.       1 等于0说明所有节点都执行完了，但是定时器节点还是在Libuv中， 
+17.           不过改成非激活状态，即不会影响Libuv退出，因为当前没有需要处理的节点了（handle）， 
+18.       2 不等于0说明没有还要节点需要处理，这种情况又分为两种 
+19.         1 还有激活状态的定时器，即不允许事件循环退出 
+20.         2 定时器都是非激活状态的，允许事件循环退出 
+21.       具体见Timeout的unref和ref方法 
+22.     */  
+23.     if (expiry_ms != 0) {  
+24.         // 算出下次超时的相对值  
+25.         int64_t duration_ms =  
+26.             llabs(expiry_ms) - (uv_now(env-&gt;event_loop()) - env-&gt;timer_base());  
+27.         // 重新把handle插入Libuv的二叉堆  
+28.         env-&gt;ScheduleTimer(duration_ms &gt; 0 ? duration_ms : 1);  
+29.         /* 
+30.           见internal/timer.js的processTimers 
+31.           1 大于0说明还有节点没超时，并且不允许事件循环退出， 
+32.             需要保持定时器的激活状态（如果之前是激活状态则不影响）， 
+33.           2 小于0说明定时器不影响Libuv的事件循环的结束，改成非激活状态 
+34.         */  
+35.         if (expiry_ms &gt; 0)  
+36.           uv_ref(h);  
+37.         else  
+38.           uv_unref(h);  
+39.       } else {  
+40.         uv_unref(h);  
+41.       }  
+42. }
+</code></pre></div> <p>该函数主要是执行回调，然后如果还有没超时的节点，重新设置Libuv定时器的时间。看看JS层面。 </p> <div class=highlight><pre><span></span><code>1.   function processTimers(now) {  
+2.      nextExpiry = Infinity;  
+3.      let list;  
+4.      let ranAtLeastOneList = false;  
+5.      // 取出优先队列的根节点，即最快到期的节点  
+6.      while (list = timerListQueue.peek()) {  
+7.        // 还没过期，则取得下次到期的时间，重新设置超时时间  
+8.        if (list.expiry &gt; now) {  
+9.          nextExpiry = list.expiry;  
+10.         // 返回下一次过期的时间，负的说明允许事件循环退出  
+11.         return refCount &gt; 0 ? nextExpiry : -nextExpiry;  
+12.       }  
+13.   
+14.          // 处理超时节点
+15.                listOnTimeout(list, now);  
+16.     }  
+17.         // 所有节点都处理完了
+18.     return 0;  
+19.   }  
+20.   
+21.   function listOnTimeout(list, now) {  
+22.     const msecs = list.msecs;  
+23.     let ranAtLeastOneTimer = false;  
+24.     let timer;  
+25.     // 遍历具有统一相对过期时间的队列  
+26.     while (timer = L.peek(list)) {  
+27.       // 算出已经过去的时间  
+28.       const diff = now - timer._idleStart;  
+29.       // 过期的时间比超时时间小，还没过期  
+30.       if (diff &lt; msecs) {  
+31.         /* 
+32.                     整个链表节点的最快过期时间等于当前
+33.                     还没过期节点的值，链表是有序的  
+34.                 */
+35.         list.expiry = MathMax(timer._idleStart + msecs, 
+36.                                         now + 1);  
+37.         // 更新id，用于决定在优先队列里的位置  
+38.         list.id = timerListId++;  
+39.         /*
+40.                  调整过期时间后，当前链表对应的节点不一定是优先队列
+41.                   里的根节点了，可能有它更快到期，即当前链表对应的节
+42.                   点可能需要往下沉
+43.                 */  
+44.         timerListQueue.percolateDown(1);  
+45.         return;  
+46.       }  
+47.   
+48.       // 准备执行用户设置的回调，删除这个节点  
+49.       L.remove(timer);  
+50.   
+51.       let start;  
+52.       if (timer._repeat)  
+53.         start = getLibuvNow(); 
+54.       try {  
+55.         const args = timer._timerArgs;  
+56.         // 执行用户设置的回调  
+57.         if (args === undefined)  
+58.           timer._onTimeout();  
+59.         else  
+60.           timer._onTimeout(...args);  
+61.       } finally {  
+62.         /* 
+63.                     设置了重复执行回调，即来自setInterval。
+64.                     则需要重新加入链表。  
+65.                 */
+66.         if (timer._repeat &amp;&amp; 
+67.                      timer._idleTimeout !== -1) {  
+68.           // 更新超时时间，一样的时间间隔  
+69.           timer._idleTimeout = timer._repeat;  
+70.           // 重新插入链表  
+71.           insert(timer, timer._idleTimeout, start);  
+72.         } else if (!timer._idleNext &amp;&amp; 
+73.                               !timer._idlePrev &amp;&amp; 
+74.                               !timer._destroyed) {          
+75.                     timer._destroyed = true;
+76.                     // 是ref类型，则减去一个，防止阻止事件循环退出  
+77.           if (timer[kRefed])  
+78.             refCount--;  
+79.     }  
+80.     // 为空则删除  
+81.     if (list === timerListMap[msecs]) {  
+82.       delete timerListMap[msecs];  
+83.             // 从优先队列中删除该节点，并调整队列结构
+84.       timerListQueue.shift();  
+85.     }  
+86.   }  
+</code></pre></div> <p>上面的代码主要是遍历优先队列<br> 1 如果当前节点超时，则遍历它对应的链表。遍历链表的时候如果遇到超时的节点则执行。如果遇到没有超时的节点，则说明后面的节点也不会超时了，因为链表是有序的，接着重新计算出最快超时时间，修改链表的expiry字段。调整在优先队列的位置。因为修改后的expiry可能会导致位置发生变化。如果链表的节点全部都超时了，则从优先队列中删除链表对应的节点。重新调整优先队列的节点。<br> 2 如果当前节点没有超时则说明后面的节点也不会超时了。因为当前节点是优先队列中最快到期（最小的）的节点。接着设置Libuv的定时器时间为当前节点的时间。等待下一次超时处理。</p> <h2 id=106-refunref>10.6 ref和unref<a class=headerlink href=#106-refunref title="Permanent link">&para;</a></h2> <p>setTimeout返回的是一个Timeout对象，该提供了ref和unref接口，刚才提到了关于定时器影响事件循环退出的内容，我们看一下这个原理。刚才说到Node.js定时器模块在Libuv中只对应一个定时器节点。在Node.js初始化的时候，初始化了该节点。</p> <div class=highlight><pre><span></span><code>1.  void Environment::InitializeLibuv(bool start_profiler_idle_notifier) {  
+2.    // 初始化定时器  
+3.    CHECK_EQ(0, uv_timer_init(event_loop(), timer_handle()));  
+4.    // 置unref状态
+5.    uv_unref(reinterpret_cast&lt;uv_handle_t*&gt;(timer_handle()));  
+6.  }  
+</code></pre></div> <p>我们看到底层定时器节点默认是unref状态的，所以不会影响事件循环的退出。因为初始化时JS层没有定时节点。可以通过Node.js提供的接口修改该状态。Node.js支持ref状态的Timeout（setTimeout）和unref状态的Timeout（setUnrefTimeout）。</p> <div class=highlight><pre><span></span><code>1.  function Timeout(callback, after, args, isRepeat, isRefed) {  
+2.    if (isRefed)  
+3.      incRefCount();  
+4.    this[kRefed] = isRefed;  
+5.  }  
+</code></pre></div> <p>最后一个参数就是控制ref还是unref的。我们继续看一下如果isRefed为true的时候的逻辑</p> <div class=highlight><pre><span></span><code>1.  function incRefCount() {  
+2.    if (refCount++ === 0)  
+3.      toggleTimerRef(true);  
+4.  }  
+</code></pre></div> <p>refCount初始化的时候是1，所以在新加第一个Timeout的时候，if成立。我们接着看toggleTimerRef，该函数对应的代码如下</p> <div class=highlight><pre><span></span><code>1.  void Environment::ToggleTimerRef(bool ref) {  
+2.    // 打上ref标记，  
+3.    if (ref) {  
+4.      uv_ref(reinterpret_cast&lt;uv_handle_t*&gt;(timer_handle()));  
+5.    } else {  
+6.      uv_unref(reinterpret_cast&lt;uv_handle_t*&gt;(timer_handle()));  
+7.    }  
+8.  }  
+</code></pre></div> <p>该函数正是给定时器对应的handle设置状态的。setTimeout的时候，isRefed的值是true的，Node.js还提供了另外一个函数setUnrefTimeout。</p> <div class=highlight><pre><span></span><code>1.  function setUnrefTimeout(callback, after) {  
+2.    const timer = new Timeout(callback, after, undefined, false, false);  
+3.    insert(timer, timer._idleTimeout);  
+4.    return timer;  
+5.  }  
+</code></pre></div> <p>该函数和setTimeout最主要的区别是new Timeout的时候，最后一个参数是false（isRefed变量的值），所以setUnrefTimeout设置的定时器是不会影响Libuv事件循环退出的。另外除了Node.js直接提供的api后。我们还可以通过Timeout对象提供的ref和unref手动控制这个状态。 现在通过一个例子具体来看一下。</p> <div class=highlight><pre><span></span><code>1.  const timeout = setTimeout(() =&gt; {  
+2.      console.log(1)  
+3.  }, 10000);  
+4.  timeout.unref();  
+5.  // timeout.ref(); 加这一句会输出1  
+</code></pre></div> <p>上面的代码中，1是不会输出，除非把注释去掉。Unref和ref是相反的参数，即把定时器模块对应的Libuv handle改成unref状态。</p> </article> </div> </div> <a href=# class="md-top md-icon" data-md-component=top data-md-state=hidden> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"/></svg> Back to top </a> </main> <footer class=md-footer> <nav class="md-footer__inner md-grid" aria-label=Footer> <a href=../chapter09-Unix%E5%9F%9F/ class="md-footer__link md-footer__link--prev" aria-label="上一页: 09-Unix域" rel=prev> <div class="md-footer__button md-icon"> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg> </div> <div class=md-footer__title> <div class=md-ellipsis> <span class=md-footer__direction> 上一页 </span> 09-Unix域 </div> </div> </a> <a href=../chapter11-setImmediate%E5%92%8CnextTick/ class="md-footer__link md-footer__link--next" aria-label="下一页: 11-setImmediate和nextTick" rel=next> <div class=md-footer__title> <div class=md-ellipsis> <span class=md-footer__direction> 下一页 </span> 11-setImmediate和nextTick </div> </div> <div class="md-footer__button md-icon"> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4z"/></svg> </div> </a> </nav> <div class="md-footer-meta md-typeset"> <div class="md-footer-meta__inner md-grid"> <div class=md-footer-copyright> <div class=md-footer-copyright__highlight> Copyright &copy; 2021 theanarkh </div> Made with <a href=https://squidfunk.github.io/mkdocs-material/ target=_blank rel=noopener> Material for MkDocs </a> </div> <div class=md-footer-social> <a href=https://github.com/theanarkh target=_blank rel=noopener title=github.com class=md-footer-social__link> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 496 512"><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg> </a> <a href=https://www.zhihu.com/people/theanarkh target=_blank rel=noopener title=www.zhihu.com class=md-footer-social__link> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 640 512"><path d="M170.54 148.13v217.54l23.43.01 7.71 26.37 42.01-26.37h49.53V148.13H170.54zm97.75 193.93h-27.94l-27.9 17.51-5.08-17.47-11.9-.04V171.75h72.82v170.31zm-118.46-94.39H97.5c1.74-27.1 2.2-51.59 2.2-73.46h51.16s1.97-22.56-8.58-22.31h-88.5c3.49-13.12 7.87-26.66 13.12-40.67 0 0-24.07 0-32.27 21.57-3.39 8.9-13.21 43.14-30.7 78.12 5.89-.64 25.37-1.18 36.84-22.21 2.11-5.89 2.51-6.66 5.14-14.53h28.87c0 10.5-1.2 66.88-1.68 73.44H20.83c-11.74 0-15.56 23.62-15.56 23.62h65.58C66.45 321.1 42.83 363.12 0 396.34c20.49 5.85 40.91-.93 51-9.9 0 0 22.98-20.9 35.59-69.25l53.96 64.94s7.91-26.89-1.24-39.99c-7.58-8.92-28.06-33.06-36.79-41.81L87.9 311.95c4.36-13.98 6.99-27.55 7.87-40.67h61.65s-.09-23.62-7.59-23.62v.01zm412.02-1.6c20.83-25.64 44.98-58.57 44.98-58.57s-18.65-14.8-27.38-4.06c-6 8.15-36.83 48.2-36.83 48.2l19.23 14.43zm-150.09-59.09c-9.01-8.25-25.91 2.13-25.91 2.13s39.52 55.04 41.12 57.45l19.46-13.73s-25.67-37.61-34.66-45.86h-.01zM640 258.35c-19.78 0-130.91.93-131.06.93v-101c4.81 0 12.42-.4 22.85-1.2 40.88-2.41 70.13-4 87.77-4.81 0 0 12.22-27.19-.59-33.44-3.07-1.18-23.17 4.58-23.17 4.58s-165.22 16.49-232.36 18.05c1.6 8.82 7.62 17.08 15.78 19.55 13.31 3.48 22.69 1.7 49.15.89 24.83-1.6 43.68-2.43 56.51-2.43v99.81H351.41s2.82 22.31 25.51 22.85h107.94v70.92c0 13.97-11.19 21.99-24.48 21.12-14.08.11-26.08-1.15-41.69-1.81 1.99 3.97 6.33 14.39 19.31 21.84 9.88 4.81 16.17 6.57 26.02 6.57 29.56 0 45.67-17.28 44.89-45.31v-73.32h122.36c9.68 0 8.7-23.78 8.7-23.78l.03-.01z"/></svg> </a> </div> </div> </div> </footer> </div> <div class=md-dialog data-md-component=dialog> <div class="md-dialog__inner md-typeset"></div> </div> <script id=__config type=application/json>{"base": "..", "features": ["content.code.annotate", "navigation.indexes", "navigation.instant", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest"], "translations": {"clipboard.copy": "\u590d\u5236", "clipboard.copied": "\u5df2\u590d\u5236", "search.config.lang": "ja", "search.config.pipeline": "trimmer, stemmer", "search.config.separator": "[\\uff0c\\u3002]+", "search.placeholder": "\u641c\u7d22", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing", "select.version.title": "Select version"}, "search": "../assets/javascripts/workers/search.94ec81fe.min.js", "version": null}</script> <script src=../assets/javascripts/bundle.48dfec6c.min.js></script> </body> </html>
